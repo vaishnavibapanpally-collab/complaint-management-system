@@ -1,11 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
-const mockComplaints = [
-  { id: 1, name: "Arjun Sharma", email: "arjun@college.edu", category: "IT", complaintText: "WiFi not working in Block B lab since Monday.", priority: "High", status: "Pending", createdAt: "2024-03-10T09:30:00" },
-  { id: 2, name: "Priya Nair", email: "priya@college.edu", category: "Maintenance", complaintText: "Water leakage in girls hostel bathroom.", priority: "High", status: "In Progress", createdAt: "2024-03-09T14:00:00" },
-  { id: 3, name: "Rohit Verma", email: "rohit@college.edu", category: "Cleanliness", complaintText: "Garbage not collected from corridor for 3 days.", priority: "Medium", status: "Resolved", createdAt: "2024-03-08T11:15:00" },
-  { id: 4, name: "Sneha Patel", email: "sneha@college.edu", category: "Electrical", complaintText: "Lights flickering in classroom 204.", priority: "Low", status: "Pending", createdAt: "2024-03-11T08:45:00" },
-];
+const API = process.env.REACT_APP_API_URL;
 
 const STATUS_COLORS = {
   "Pending":     { bg: "#FEF3C7", text: "#92400E", dot: "#F59E0B", border: "#FDE68A" },
@@ -18,31 +13,24 @@ const CATEGORY_ICONS = {
   "Electrical": "⚡", "Safety": "🚨", "Other": "📋"
 };
 
-// ── SMART AI ENGINE (keyword-based) ──
 function analyzeWithAI(text) {
   const t = text.toLowerCase();
-
-  // Detect Category
   let category = "Other";
   if(/leak|pipe|water|broken|door|window|roof|wall|floor|ceiling|crack|repair|fix|building|toilet|bathroom|tap/.test(t)) category = "Maintenance";
   else if (/garbage|trash|dirty|clean|sweep|dust|waste|smell|cockroach|rat|pest|hygiene|toilet smell/.test(t)) category = "Cleanliness";
   else if (/light|fan|power|electricity|switch|socket|wire|short circuit|blackout|electric|bulb|ac|air conditioner/.test(t)) category = "Electrical";
   else if (/fire|danger|injury|accident|emergency|unsafe|threat|fight|flood/.test(t)) category = "Safety";
 
-  // Detect Priority
   let priority = "Low";
   if (/urgent|emergency|immediately|critical|danger|fire|flood|injury|not working since|days|week|still|not fixed/.test(t)) priority = "Urgent";
   else if (/not working|broken|failed|down|leaking|flickering|no power|no wifi|cannot access|blocked/.test(t)) priority = "High";
   else if (/sometimes|occasionally|slow|minor|small|issue|problem/.test(t)) priority = "Medium";
-  else priority = "Low";
 
-  // Detect Sentiment
   let sentiment = "Neutral";
   if (/please|kindly|request|hope/.test(t)) sentiment = "Concerned";
   else if (/urgent|immediately|asap|not fixed|still|again|repeatedly|days|weeks/.test(t)) sentiment = "Frustrated";
   else if (/emergency|danger|fire|flood|injury/.test(t)) sentiment = "Urgent";
 
-  // Generate reason
   const reasons = {
     "Maintenance": "Complaint indicates a structural or plumbing maintenance requirement.",
     "Cleanliness": "Complaint relates to hygiene or sanitation conditions.",
@@ -51,7 +39,6 @@ function analyzeWithAI(text) {
     "Other": "Complaint does not match a specific predefined category."
   };
 
-  // Generate resolution suggestion
   const suggestions = {
     "Maintenance": "Dispatch the maintenance team immediately to assess and repair the structural or plumbing issue.",
     "Cleanliness": "Schedule the housekeeping team for an immediate cleaning session and review waste collection schedules.",
@@ -65,7 +52,7 @@ function analyzeWithAI(text) {
 
 export default function App() {
   const [view, setView]             = useState("home");
-  const [complaints, setComplaints] = useState(mockComplaints);
+  const [complaints, setComplaints] = useState([]);
   const [submitted, setSubmitted]   = useState(false);
   const [form, setForm]             = useState({ name: "", email: "", category: "", priority: "", complaintText: "" });
   const [trackId, setTrackId]       = useState("");
@@ -73,6 +60,14 @@ export default function App() {
   const [filterStatus, setFilterStatus]         = useState("All");
   const [aiLoading, setAiLoading]   = useState(false);
   const [aiResult, setAiResult]     = useState(null);
+
+  // ── Load complaints from backend on mount ──
+  useEffect(() => {
+    fetch(`${API}/api/complaints`)
+      .then(res => res.json())
+      .then(data => setComplaints(data))
+      .catch(err => console.error("Failed to load complaints:", err));
+  }, []);
 
   const stats = {
     total:      complaints.length,
@@ -85,7 +80,6 @@ export default function App() {
     if (form.complaintText.trim().length < 10) return;
     setAiLoading(true);
     setAiResult(null);
-    // Simulate AI thinking delay
     setTimeout(() => {
       const result = analyzeWithAI(form.complaintText);
       setAiResult(result);
@@ -94,20 +88,45 @@ export default function App() {
     }, 1800);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!form.name || !form.email || !form.complaintText) return alert("Please fill all fields");
-    const newComplaint = { ...form, id: complaints.length + 1, status: "Pending", createdAt: new Date().toISOString() };
-    setComplaints([...complaints, newComplaint]);
-    setSubmitted(true);
+    try {
+      const res = await fetch(`${API}/api/complaints`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form)
+      });
+      const newComplaint = await res.json();
+      setComplaints([...complaints, newComplaint]);
+      setSubmitted(true);
+    } catch (err) {
+      alert("Failed to submit complaint. Please try again.");
+    }
   };
 
-  const handleTrack = () => {
-    const found = complaints.find(c => c.id === parseInt(trackId));
-    setTrackedComplaint(found !== undefined ? found : null);
+  const handleTrack = async () => {
+    try {
+      const res = await fetch(`${API}/api/complaints/${trackId}`);
+      if (res.ok) {
+        const found = await res.json();
+        setTrackedComplaint(found);
+      } else {
+        setTrackedComplaint(null);
+      }
+    } catch (err) {
+      setTrackedComplaint(null);
+    }
   };
 
-  const updateStatus = (id, newStatus) => {
-    setComplaints(complaints.map(c => c.id === id ? { ...c, status: newStatus } : c));
+  const updateStatus = async (id, newStatus) => {
+    try {
+      await fetch(`${API}/api/complaints/${id}/status?status=${newStatus}`, {
+        method: "PUT"
+      });
+      setComplaints(complaints.map(c => c.id === id ? { ...c, status: newStatus } : c));
+    } catch (err) {
+      alert("Failed to update status.");
+    }
   };
 
   const filteredComplaints = filterStatus === "All" ? complaints : complaints.filter(c => c.status === filterStatus);
@@ -229,7 +248,6 @@ export default function App() {
 
             {!submitted ? (
               <div className="card" style={{ padding: 36 }}>
-                {/* Name & Email */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
                   <div>
                     <label style={{ display: "block", marginBottom: 8, fontWeight: 600, fontSize: 14, color: "#444" }}>Full Name *</label>
@@ -241,7 +259,6 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Complaint text + AI button */}
                 <div style={{ marginBottom: 20 }}>
                   <label style={{ display: "block", marginBottom: 8, fontWeight: 600, fontSize: 14, color: "#444" }}>Describe Your Complaint *</label>
                   <textarea className="input" placeholder="e.g. WiFi has not been working in Block B lab since Monday morning..." value={form.complaintText}
@@ -249,14 +266,11 @@ export default function App() {
                     style={{ minHeight: 120, resize: "vertical" }} />
                   <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
                     <button className="btn-ai" onClick={handleAnalyze} disabled={aiLoading || form.complaintText.trim().length < 10}>
-                      {aiLoading
-                        ? <><span className="spin">⚙️</span> Analyzing...</>
-                        : <><span>✨</span> Analyze with AI</>}
+                      {aiLoading ? <><span className="spin">⚙️</span> Analyzing...</> : <><span>✨</span> Analyze with AI</>}
                     </button>
                   </div>
                 </div>
 
-                {/* AI Loading */}
                 {aiLoading && (
                   <div className="ai-card" style={{ marginBottom: 20 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -269,7 +283,6 @@ export default function App() {
                   </div>
                 )}
 
-                {/* AI Result */}
                 {aiResult && !aiLoading && (
                   <div className="ai-card fade-in" style={{ marginBottom: 20 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
@@ -302,7 +315,6 @@ export default function App() {
                   </div>
                 )}
 
-                {/* Category & Priority dropdowns */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 28 }}>
                   <div>
                     <label style={{ display: "block", marginBottom: 8, fontWeight: 600, fontSize: 14, color: "#444" }}>

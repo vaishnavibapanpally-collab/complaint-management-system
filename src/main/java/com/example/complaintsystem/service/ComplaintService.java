@@ -24,7 +24,9 @@ public class ComplaintService {
     public List<Complaint> getAllComplaints() {
         return repo.findAll();
     }
-
+    public Complaint getComplaintById(Long id) {
+        return repo.findById(id).orElseThrow();
+    }
     public Complaint updateStatus(Long id, String status) {
         Complaint c = repo.findById(id).orElseThrow();
         c.setStatus(status);

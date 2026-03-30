@@ -7,7 +7,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/complaints")
-@CrossOrigin(origins = "http://localhost:3000")
+@CrossOrigin(origins = "*")
 public class ComplaintController {
 
     private final ComplaintService service;
@@ -24,6 +24,11 @@ public class ComplaintController {
     @GetMapping
     public List<Complaint> getAll() {
         return service.getAllComplaints();
+    }
+
+    @GetMapping("/{id}")
+    public Complaint getById(@PathVariable Long id) {
+        return service.getComplaintById(id);
     }
 
     @PutMapping("/{id}/status")
